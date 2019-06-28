@@ -31,23 +31,27 @@ public class DefaultLoadControl implements LoadControl {
   /**
    * The default minimum duration of media that the player will attempt to ensure is buffered at all
    * times, in milliseconds.
+   * 默认的最小缓冲大小时长
    */
   public static final int DEFAULT_MIN_BUFFER_MS = 15000;
 
   /**
    * The default maximum duration of media that the player will attempt to buffer, in milliseconds.
+   * 默认最大缓冲时长
    */
   public static final int DEFAULT_MAX_BUFFER_MS = 50000;
 
   /**
    * The default duration of media that must be buffered for playback to start or resume following a
    * user action such as a seek, in milliseconds.
+   * 用户操作后的默认必备缓冲时长（比如用户做了一个seek操作）
    */
   public static final int DEFAULT_BUFFER_FOR_PLAYBACK_MS = 2500;
 
   /**
    * The default duration of media that must be buffered for playback to resume after a rebuffer, in
    * milliseconds. A rebuffer is defined to be caused by buffer depletion rather than a user action.
+   * 默认必备缓冲时长（缓冲区消耗光）
    */
   public static final int DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000;
 

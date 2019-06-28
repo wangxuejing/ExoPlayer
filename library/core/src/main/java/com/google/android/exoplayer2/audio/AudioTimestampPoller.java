@@ -20,6 +20,8 @@ import android.media.AudioTimestamp;
 import android.media.AudioTrack;
 import android.support.annotation.IntDef;
 import android.support.annotation.Nullable;
+import android.util.Log;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.util.Util;
 import java.lang.annotation.Retention;
@@ -41,7 +43,21 @@ import java.lang.annotation.RetentionPolicy;
  * time since it was sampled. Otherwise, it may be stationary.
  *
  * <p>Call {@link #reset()} when pausing or resuming the track.
+
+ * 获取音轨时间戳，如果平台支持（sdk>19）。
+ *
+ * 获取时间戳前，最好调用{@link #maybePollTimestamp(long)}，更新时间戳，然后在获取帧时间和系统时间
+ *
+ * 最后调用接收时间戳或者拒绝时间戳的更新。
+ *
+ *  调用{@link #hasTimestamp()}可以获取是否支持能够获取时间戳。
+ *
+ *  调用{@link #getTimestampSystemTimeUs()}可以获取最新采样的系统时间戳
+ *
+ *  调用{@link #getTimestampPositionFrames()}可以获取最新帧时间戳
+ *
  */
+
 /* package */ final class AudioTimestampPoller {
 
   /** Timestamp polling states. */
@@ -114,6 +130,7 @@ import java.lang.annotation.RetentionPolicy;
    * @return Whether the timestamp was updated.
    */
   public boolean maybePollTimestamp(long systemTimeUs) {
+    //没有时间戳或者在播放时十秒才更新一次，有时间戳或者刚初始化完成的话5000us就更新一次
     if (audioTimestamp == null || (systemTimeUs - lastTimestampSampleTimeUs) < sampleIntervalUs) {
       return false;
     }
@@ -203,6 +220,7 @@ import java.lang.annotation.RetentionPolicy;
    * current position for the track can be extrapolated based on elapsed real time since the system
    * time at which the timestamp was sampled.
    */
+  //当前时间戳是否处于增长状态
   public boolean isTimestampAdvancing() {
     return state == STATE_TIMESTAMP_ADVANCING;
   }
@@ -218,7 +236,7 @@ import java.lang.annotation.RetentionPolicy;
    * If {@link #maybePollTimestamp(long)} or {@link #hasTimestamp()} returned {@code true}, returns
    * the system time at which the latest timestamp was sampled, in microseconds.
    */
-  public long getTimestampSystemTimeUs() {
+  public long getTimestampSystemTimeUs() {//最新采样的时间戳
     return audioTimestamp != null ? audioTimestamp.getTimestampSystemTimeUs() : C.TIME_UNSET;
   }
 
@@ -226,7 +244,7 @@ import java.lang.annotation.RetentionPolicy;
    * If {@link #maybePollTimestamp(long)} or {@link #hasTimestamp()} returned {@code true}, returns
    * the latest timestamp's position in frames.
    */
-  public long getTimestampPositionFrames() {
+  public long getTimestampPositionFrames() {//最新音频帧的时间戳
     return audioTimestamp != null ? audioTimestamp.getTimestampPositionFrames() : C.POSITION_UNSET;
   }
 
@@ -284,7 +302,7 @@ import java.lang.annotation.RetentionPolicy;
     public boolean maybeUpdateTimestamp() {
       boolean updated = audioTrack.getTimestamp(audioTimestamp);
       if (updated) {
-        long rawPositionFrames = audioTimestamp.framePosition;
+        long rawPositionFrames = audioTimestamp.framePosition;//相对于假定音频流开始的帧中的位置
         if (lastTimestampRawPositionFrames > rawPositionFrames) {
           // The value must have wrapped around.
           rawTimestampFramePositionWrapCount++;
@@ -296,8 +314,8 @@ import java.lang.annotation.RetentionPolicy;
       return updated;
     }
 
-    public long getTimestampSystemTimeUs() {
-      return audioTimestamp.nanoTime / 1000;
+    public long getTimestampSystemTimeUs() {//十秒一次才有效
+      return audioTimestamp.nanoTime / 1000;//与音频管道中的帧关联的时间
     }
 
     public long getTimestampPositionFrames() {

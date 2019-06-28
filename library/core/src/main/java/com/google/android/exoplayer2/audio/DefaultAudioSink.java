@@ -155,11 +155,11 @@ public final class DefaultAudioSink implements AudioSink {
   /**
    * A minimum length for the {@link AudioTrack} buffer, in microseconds.
    */
-  private static final long MIN_BUFFER_DURATION_US = 250000;
+  private static final long MIN_BUFFER_DURATION_US = 250000;//最小緩衝長度250ms
   /**
    * A maximum length for the {@link AudioTrack} buffer, in microseconds.
    */
-  private static final long MAX_BUFFER_DURATION_US = 750000;
+  private static final long MAX_BUFFER_DURATION_US = 750000;//最大缓冲时长
   /**
    * The length for passthrough {@link AudioTrack} buffers, in microseconds.
    */
@@ -382,7 +382,7 @@ public final class DefaultAudioSink implements AudioSink {
   }
 
   @Override
-  public long getCurrentPositionUs(boolean sourceEnded) {
+  public long getCurrentPositionUs(boolean sourceEnded) {//获取当前音频播放位置
     if (!isInitialized() || startMediaTimeState == START_NOT_SET) {
       return CURRENT_POSITION_NOT_SET;
     }
@@ -556,11 +556,11 @@ public final class DefaultAudioSink implements AudioSink {
     // track instances. Without this guarantee it would be possible, in extreme cases, to exhaust
     // the shared memory that's available for audio track buffers. This would in turn cause the
     // initialization of the audio track to fail.
-    releasingConditionVariable.block();
+    releasingConditionVariable.block();//确保异步释放完成 再重新进入初始化流程
 
-    audioTrack = initializeAudioTrack();
-    int audioSessionId = audioTrack.getAudioSessionId();
-    if (enablePreV21AudioSessionWorkaround) {
+    audioTrack = initializeAudioTrack();//初始化AudioTrack,内部已實現不同版本的兼容初始化
+    int audioSessionId = audioTrack.getAudioSessionId();//獲取初始化的AudioTrack的session
+    if (enablePreV21AudioSessionWorkaround) {//這個值是靜態的，必須要在初始化之前設置
       if (Util.SDK_INT < 21) {
         // The workaround creates an audio track with a two byte buffer on the same session, and
         // does not release it until this object is released, which keeps the session active.
@@ -613,10 +613,10 @@ public final class DefaultAudioSink implements AudioSink {
   public boolean handleBuffer(ByteBuffer buffer, long presentationTimeUs)
       throws InitializationException, WriteException {
     Assertions.checkArgument(inputBuffer == null || buffer == inputBuffer);
-    if (!isInitialized()) {
-      initialize();
-      if (playing) {
-        play();
+    if (!isInitialized()) {//如果没初始化
+      initialize();//初始化
+      if (playing) {//是否在播放
+        play();//播放
       }
     }
 
@@ -624,17 +624,17 @@ public final class DefaultAudioSink implements AudioSink {
       return false;
     }
 
-    if (inputBuffer == null) {
+    if (inputBuffer == null) {//
       // We are seeing this buffer for the first time.
       if (!buffer.hasRemaining()) {
         // The buffer is empty.
         return true;
       }
 
-      if (!isInputPcm && framesPerEncodedSample == 0) {
+      if (!isInputPcm && framesPerEncodedSample == 0) {//非PCM同时 每个Sample的帧数还没被确定
         // If this is the first encoded sample, calculate the sample size in frames.
         framesPerEncodedSample = getFramesPerEncodedSample(outputEncoding, buffer);
-        if (framesPerEncodedSample == 0) {
+        if (framesPerEncodedSample == 0) {//如果计算结果仍为零
           // We still don't know the number of frames per sample, so drop the buffer.
           // For TrueHD this can occur after some seek operations, as not every sample starts with
           // a syncframe header. If we chunked samples together so the extracted samples always
@@ -749,32 +749,34 @@ public final class DefaultAudioSink implements AudioSink {
     if (!buffer.hasRemaining()) {
       return;
     }
-    if (outputBuffer != null) {
-      Assertions.checkArgument(outputBuffer == buffer);
+    if (outputBuffer != null) {//如果數據沒被寫完，這個outputBuffer是不會被置空的，所以如果而外面傳入了新的buffer，會抛出異常
+      Assertions.checkArgument(outputBuffer == buffer);//判斷這個buffer是否等於還沒被寫完的buffer
     } else {
-      outputBuffer = buffer;
+      outputBuffer = buffer;//記錄這個buffer，用於下一次這個方法被調用時，判斷這個buffer是否被重複調用
       if (Util.SDK_INT < 21) {
         int bytesRemaining = buffer.remaining();
         if (preV21OutputBuffer == null || preV21OutputBuffer.length < bytesRemaining) {
-          preV21OutputBuffer = new byte[bytesRemaining];
+          preV21OutputBuffer = new byte[bytesRemaining];//新建一個數組用來存儲傳過來的buffer數據
         }
-        int originalPosition = buffer.position();
-        buffer.get(preV21OutputBuffer, 0, bytesRemaining);
-        buffer.position(originalPosition);
-        preV21OutputBufferOffset = 0;
+        int originalPosition = buffer.position();//臨時保存buffer的指針位置
+        buffer.get(preV21OutputBuffer, 0, bytesRemaining);//將傳入的buffer數據拷貝出來
+        buffer.position(originalPosition);//將指針位置再設置回去
+        preV21OutputBufferOffset = 0;//僅僅用來記錄這個buffer的偏移量，拷貝之後將偏移量置爲0
       }
     }
     int bytesRemaining = buffer.remaining();
     int bytesWritten = 0;
     if (Util.SDK_INT < 21) { // isInputPcm == true
-      // Work out how many bytes we can write without the risk of blocking.
+      // Work out how many bytes we can write without the risk of blocking.//計算我們能在沒有阻塞風險的情況下寫入多少數據
       int bytesToWrite = audioTrackPositionTracker.getAvailableBufferSize(writtenPcmBytes);
       if (bytesToWrite > 0) {
-        bytesToWrite = Math.min(bytesRemaining, bytesToWrite);
-        bytesWritten = audioTrack.write(preV21OutputBuffer, preV21OutputBufferOffset, bytesToWrite);
+        bytesToWrite = Math.min(bytesRemaining, bytesToWrite);//緩衝區剩餘 和當前傳入的數據剩餘 中較小的作爲要被寫的值
+        //假如 bytesRemaining > bytesToWrite,就只有 preV21OutputBuffer中就還有（bytesRemaining - bytesToWrite）的數據量未被寫入
+        //
+        bytesWritten = audioTrack.write(preV21OutputBuffer, preV21OutputBufferOffset, bytesToWrite);//阻塞寫入（實際上前面計算得好，不會阻塞）
         if (bytesWritten > 0) {
           preV21OutputBufferOffset += bytesWritten;
-          buffer.position(buffer.position() + bytesWritten);
+          buffer.position(buffer.position() + bytesWritten);//將buffer指針前移
         }
       }
     } else if (tunneling) {
@@ -782,23 +784,23 @@ public final class DefaultAudioSink implements AudioSink {
       bytesWritten = writeNonBlockingWithAvSyncV21(audioTrack, buffer, bytesRemaining,
           avSyncPresentationTimeUs);
     } else {
-      bytesWritten = writeNonBlockingV21(audioTrack, buffer, bytesRemaining);
+      bytesWritten = writeNonBlockingV21(audioTrack, buffer, bytesRemaining);//SDK大於等於21直接調用阻塞式寫入數據
     }
 
-    lastFeedElapsedRealtimeMs = SystemClock.elapsedRealtime();
+    lastFeedElapsedRealtimeMs = SystemClock.elapsedRealtime();//記錄本次投喂數據時間
 
     if (bytesWritten < 0) {
       throw new WriteException(bytesWritten);
     }
 
     if (isInputPcm) {
-      writtenPcmBytes += bytesWritten;
+      writtenPcmBytes += bytesWritten;//更新已經寫入的數據長度
     }
-    if (bytesWritten == bytesRemaining) {
+    if (bytesWritten == bytesRemaining) {//如果寫入AudioTrack的數據量等於buffer的數據大小
       if (!isInputPcm) {
         writtenEncodedFrames += framesPerEncodedSample;
       }
-      outputBuffer = null;
+      outputBuffer = null; //説明當前buffer已經被寫完了，
     }
   }
 
@@ -911,7 +913,7 @@ public final class DefaultAudioSink implements AudioSink {
 
   @Override
   public void enableTunnelingV21(int tunnelingAudioSessionId) {
-    Assertions.checkState(Util.SDK_INT >= 21);
+    Assertions.checkState(Util.SDK_INT >= 21);//必须大于等于21
     if (!tunneling || audioSessionId != tunnelingAudioSessionId) {
       tunneling = true;
       audioSessionId = tunnelingAudioSessionId;
@@ -957,11 +959,11 @@ public final class DefaultAudioSink implements AudioSink {
   @Override
   public void reset() {
     if (isInitialized()) {
-      submittedPcmBytes = 0;
-      submittedEncodedFrames = 0;
-      writtenPcmBytes = 0;
-      writtenEncodedFrames = 0;
-      framesPerEncodedSample = 0;
+      submittedPcmBytes = 0;//已提交的PCM數據大小，單位byte
+      submittedEncodedFrames = 0;//提交的音頻幀數量
+      writtenPcmBytes = 0;//已写到AudioTrack的PCM数据大小，单位byte
+      writtenEncodedFrames = 0;//已寫入到AudioTrack的幀數
+      framesPerEncodedSample = 0;//每個采樣裏面包含多少幀數據
       if (afterDrainPlaybackParameters != null) {
         playbackParameters = afterDrainPlaybackParameters;
         afterDrainPlaybackParameters = null;
@@ -971,8 +973,8 @@ public final class DefaultAudioSink implements AudioSink {
       playbackParametersCheckpoints.clear();
       playbackParametersOffsetUs = 0;
       playbackParametersPositionUs = 0;
-      inputBuffer = null;
-      outputBuffer = null;
+      inputBuffer = null;//用於緩存handleBuffer調用時傳入的buffer（寫入sink）
+      outputBuffer = null;//用於緩存writeBuffer調用時的buffer（流出Sink）
       flushAudioProcessors();
       handledEndOfStream = false;
       drainingAudioProcessorIndex = C.INDEX_UNSET;
@@ -1075,10 +1077,16 @@ public final class DefaultAudioSink implements AudioSink {
   }
 
   private long framesToDurationUs(long frameCount) {
+    //计算指定帧数的时间长度 = 1000000*帧数/采样率
+    //等式中的1000000为单位转换需要的数字；
+    // 可以看出这个类中的音频帧指的是一个采样点，
+    // 比如1000个采样点需要的时间  ，采样率为1000000Hz， 则这个时间就为1000us 这里要注意单位的换算
     return (frameCount * C.MICROS_PER_SECOND) / outputSampleRate;
   }
 
   private long durationUsToFrames(long durationUs) {
+    //计算指定时间内有多少个帧（这个Frame需要理解为一个采样点），比如采样率为44.1KHz中的一次采样
+    //比如1s，也就是1000000us，这里算出来就为一秒的采样次数。
     return (durationUs * outputSampleRate) / C.MICROS_PER_SECOND;
   }
 
@@ -1087,6 +1095,8 @@ public final class DefaultAudioSink implements AudioSink {
   }
 
   private long getWrittenFrames() {
+    // 如果是PCM数据，已写入帧数=已写入的Pcm数据字节数/输出的PCM帧大小
+    // 输出的PCM帧大小 = 采样深度*通道数 （可能概念有些混淆）
     return isInputPcm ? (writtenPcmBytes / outputPcmFrameSize) : writtenEncodedFrames;
   }
 

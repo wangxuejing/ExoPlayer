@@ -27,11 +27,14 @@ public interface LoadControl {
 
   /**
    * Called by the player when prepared with a new source.
+   * 由播放器在一个新的视频源准备好时调用
    */
   void onPrepared();
 
   /**
    * Called by the player when a track selection occurs.
+   *
+   * 由播放器在完成轨道选择时候调用
    *
    * @param renderers The renderers.
    * @param trackGroups The {@link TrackGroup}s from which the selection was made.
@@ -52,6 +55,7 @@ public interface LoadControl {
 
   /**
    * Returns the {@link Allocator} that should be used to obtain media buffer allocations.
+   * 返回一个可以用来获取媒体缓存的对象
    */
   Allocator getAllocator();
 

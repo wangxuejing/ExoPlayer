@@ -570,8 +570,8 @@ public abstract class MediaCodecRenderer extends BaseRenderer {
     maybeInitCodec();
     if (codec != null) {
       TraceUtil.beginSection("drainAndFeed");
-      while (drainOutputBuffer(positionUs, elapsedRealtimeUs)) {}
-      while (feedInputBuffer()) {}
+      while (drainOutputBuffer(positionUs, elapsedRealtimeUs)) {}//将解码输出的数据消费掉
+      while (feedInputBuffer()) {}//再给解码器投喂数据
       TraceUtil.endSection();
     } else {
       decoderCounters.skippedInputBufferCount += skipSource(positionUs);
@@ -1005,7 +1005,7 @@ public abstract class MediaCodecRenderer extends BaseRenderer {
    */
   private boolean drainOutputBuffer(long positionUs, long elapsedRealtimeUs)
       throws ExoPlaybackException {
-    if (!hasOutputBuffer()) {
+    if (!hasOutputBuffer()) {//是否有输出需要处理
       int outputIndex;
       if (codecNeedsEosOutputExceptionWorkaround && codecReceivedEos) {
         try {

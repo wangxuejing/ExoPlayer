@@ -16,6 +16,8 @@
 package com.google.android.exoplayer2;
 
 import android.support.annotation.Nullable;
+import android.util.Log;
+
 import com.google.android.exoplayer2.util.Clock;
 import com.google.android.exoplayer2.util.MediaClock;
 import com.google.android.exoplayer2.util.StandaloneMediaClock;
@@ -121,7 +123,7 @@ import com.google.android.exoplayer2.util.StandaloneMediaClock;
    * Syncs internal clock if needed and returns current clock position in microseconds.
    */
   public long syncAndGetPositionUs() {
-    if (isUsingRendererClock()) {
+    if (isUsingRendererClock()) {//判断是否有渲染时钟
       ensureSynced();
       return rendererClock.getPositionUs();
     } else {

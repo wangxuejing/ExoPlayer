@@ -19,6 +19,8 @@ import android.media.AudioTimestamp;
 import android.media.AudioTrack;
 import android.os.SystemClock;
 import android.support.annotation.IntDef;
+import android.util.Log;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Util;
@@ -206,35 +208,38 @@ import java.lang.reflect.Method;
 
   public long getCurrentPositionUs(boolean sourceEnded) {
     if (audioTrack.getPlayState() == PLAYSTATE_PLAYING) {
-      maybeSampleSyncParams();
+      maybeSampleSyncParams();//播放的时候可能需要同步一下时间和参数
     }
 
     // If the device supports it, use the playback timestamp from AudioTrack.getTimestamp.
     // Otherwise, derive a smoothed position by sampling the track's frame position.
     long systemTimeUs = System.nanoTime() / 1000;
-    if (audioTimestampPoller.hasTimestamp()) {
+    if (audioTimestampPoller.hasTimestamp()) {//如果sdk大于19就能提供时间戳
       // Calculate the speed-adjusted position using the timestamp (which may be in the future).
       long timestampPositionFrames = audioTimestampPoller.getTimestampPositionFrames();
-      long timestampPositionUs = framesToDurationUs(timestampPositionFrames);
+      long timestampPositionUs = framesToDurationUs(timestampPositionFrames);//已写入的所有帧需要的时间
       if (!audioTimestampPoller.isTimestampAdvancing()) {
         return timestampPositionUs;
       }
+      //距离上一次时间戳刷新的时间差
       long elapsedSinceTimestampUs = systemTimeUs - audioTimestampPoller.getTimestampSystemTimeUs();
-      return timestampPositionUs + elapsedSinceTimestampUs;
-    } else {
+      return timestampPositionUs + elapsedSinceTimestampUs;//大致等于从音频开始播放到当前时间的差值
+    } else {//sdk小于19，或者还没获取到时间戳
       long positionUs;
-      if (playheadOffsetCount == 0) {
+      if (playheadOffsetCount == 0) {//若播放head还没有偏移，也就是刚开播放
         // The AudioTrack has started, but we don't have any samples to compute a smoothed position.
-        positionUs = getPlaybackHeadPositionUs();
+        positionUs = getPlaybackHeadPositionUs();//获取播放到当前音频帧的时间
       } else {
         // getPlaybackHeadPositionUs() only has a granularity of ~20 ms, so we base the position off
-        // the system clock (and a smoothed offset between it and the playhead position) so as to
+        // the system clock (and a smoothed offset between it and the play head position) so as to
         // prevent jitter in the reported positions.
-        positionUs = systemTimeUs + smoothedPlayheadOffsetUs;
+        positionUs = systemTimeUs + smoothedPlayheadOffsetUs;// 当前时间 加上平均偏移
+
       }
       if (!sourceEnded) {
-        positionUs -= latencyUs;
+        positionUs -= latencyUs;//要减去系统延时
       }
+        Log.e("getCurrentPositionUs","positionUs                 = "+positionUs);
       return positionUs;
     }
   }
@@ -294,8 +299,9 @@ import java.lang.reflect.Method;
    * @return An estimate of the number of bytes that can be written.
    */
   public int getAvailableBufferSize(long writtenBytes) {
+    //   還未播放的數據大小   = 已經寫入的數據大小  減去 當前已經播放的數據大小
     int bytesPending = (int) (writtenBytes - (getPlaybackHeadPosition() * outputPcmFrameSize));
-    return bufferSize - bytesPending;
+    return bufferSize - bytesPending;//緩衝區大小  減去  還未被播放的數據大小 = 緩衝區生於空間
   }
 
   /** Returns whether the track is in an invalid state and must be recreated. */
@@ -356,24 +362,29 @@ import java.lang.reflect.Method;
     audioTimestampPoller = null;
   }
 
+  /**
+   * 1、该方法更新了lastPlayheadSampleTimeUs 最新的播放Sample的时间
+   * 2、当前播放
+   */
   private void maybeSampleSyncParams() {
-    long playbackPositionUs = getPlaybackHeadPositionUs();
+    long playbackPositionUs = getPlaybackHeadPositionUs();//获取播放到当前帧位置所需的总时间。
     if (playbackPositionUs == 0) {
       // The AudioTrack hasn't output anything yet.
       return;
     }
     long systemTimeUs = System.nanoTime() / 1000;
+    //30ms一次
     if (systemTimeUs - lastPlayheadSampleTimeUs >= MIN_PLAYHEAD_OFFSET_SAMPLE_INTERVAL_US) {
       // Take a new sample and update the smoothed offset between the system clock and the playhead.
-      playheadOffsets[nextPlayheadOffsetIndex] = playbackPositionUs - systemTimeUs;
-      nextPlayheadOffsetIndex = (nextPlayheadOffsetIndex + 1) % MAX_PLAYHEAD_OFFSET_COUNT;
+      playheadOffsets[nextPlayheadOffsetIndex] = playbackPositionUs - systemTimeUs;//播放当前偏移帧的时间差
+      nextPlayheadOffsetIndex = (nextPlayheadOffsetIndex + 1) % MAX_PLAYHEAD_OFFSET_COUNT;//仅保存10个
       if (playheadOffsetCount < MAX_PLAYHEAD_OFFSET_COUNT) {
         playheadOffsetCount++;
       }
-      lastPlayheadSampleTimeUs = systemTimeUs;
+      lastPlayheadSampleTimeUs = systemTimeUs;//记录当前时间作为最新播放sample的时间
       smoothedPlayheadOffsetUs = 0;
-      for (int i = 0; i < playheadOffsetCount; i++) {
-        smoothedPlayheadOffsetUs += playheadOffsets[i] / playheadOffsetCount;
+      for (int i = 0; i < playheadOffsetCount; i++) {//最多取十个播放偏移，然后取记录个数的平均值
+        smoothedPlayheadOffsetUs += playheadOffsets[i] / playheadOffsetCount;//平均偏移
       }
     }
 
@@ -392,10 +403,10 @@ import java.lang.reflect.Method;
       return;
     }
 
-    // Perform sanity checks on the timestamp and accept/reject it.
+    // Perform sanity checks on the timestamp and accept/reject it. //时间戳合理性检查
     long audioTimestampSystemTimeUs = audioTimestampPoller.getTimestampSystemTimeUs();
     long audioTimestampPositionFrames = audioTimestampPoller.getTimestampPositionFrames();
-    if (Math.abs(audioTimestampSystemTimeUs - systemTimeUs) > MAX_AUDIO_TIMESTAMP_OFFSET_US) {
+    if (Math.abs(audioTimestampSystemTimeUs - systemTimeUs) > MAX_AUDIO_TIMESTAMP_OFFSET_US) {//偏移超过五秒
       listener.onSystemTimeUsMismatch(
           audioTimestampPositionFrames,
           audioTimestampSystemTimeUs,
@@ -403,7 +414,7 @@ import java.lang.reflect.Method;
           playbackPositionUs);
       audioTimestampPoller.rejectTimestamp();
     } else if (Math.abs(framesToDurationUs(audioTimestampPositionFrames) - playbackPositionUs)
-        > MAX_AUDIO_TIMESTAMP_OFFSET_US) {
+        > MAX_AUDIO_TIMESTAMP_OFFSET_US) {//偏移超过五秒
       listener.onPositionFramesMismatch(
           audioTimestampPositionFrames,
           audioTimestampSystemTimeUs,
@@ -415,7 +426,7 @@ import java.lang.reflect.Method;
     }
   }
 
-  private void maybeUpdateLatency(long systemTimeUs) {
+  private void maybeUpdateLatency(long systemTimeUs) {//计算播放延时
     if (isOutputPcm
         && getLatencyMethod != null
         && systemTimeUs - lastLatencySampleTimeUs >= MIN_LATENCY_SAMPLE_INTERVAL_US) {
@@ -439,7 +450,7 @@ import java.lang.reflect.Method;
     }
   }
 
-  private long framesToDurationUs(long frameCount) {
+  private long framesToDurationUs(long frameCount) {//计算播放对应帧数需要的时间
     return (frameCount * C.MICROS_PER_SECOND) / outputSampleRate;
   }
 
@@ -470,7 +481,7 @@ import java.lang.reflect.Method;
         && (outputEncoding == C.ENCODING_AC3 || outputEncoding == C.ENCODING_E_AC3);
   }
 
-  private long getPlaybackHeadPositionUs() {
+  private long getPlaybackHeadPositionUs() {//获取从开始播放到播当前帧需要的播放时间
     return framesToDurationUs(getPlaybackHeadPosition());
   }
 
@@ -482,11 +493,14 @@ import java.lang.reflect.Method;
    *
    * @return The playback head position, in frames.
    */
-  private long getPlaybackHeadPosition() {
-    if (stopTimestampUs != C.TIME_UNSET) {
+  private long getPlaybackHeadPosition() {//获取当前播放帧的位置，以帧为单位
+    if (stopTimestampUs != C.TIME_UNSET) {//如果已经停止，停止时间戳只有在音频结束时设置
       // Simulate the playback head position up to the total number of frames submitted.
+      //从停止到目前的时间长度
       long elapsedTimeSinceStopUs = (SystemClock.elapsedRealtime() * 1000) - stopTimestampUs;
+      //从停止到目前时间转换成帧的数量
       long framesSinceStop = (elapsedTimeSinceStopUs * outputSampleRate) / C.MICROS_PER_SECOND;
+      //返回结束的帧 与 （停止帧加上时间流逝帧之和） 中的小的值
       return Math.min(endPlaybackHeadPosition, stopPlaybackHeadPosition + framesSinceStop);
     }
 
@@ -495,9 +509,9 @@ import java.lang.reflect.Method;
       // The audio track hasn't been started.
       return 0;
     }
-
+    //获取已经播放指针位置，以帧为单位
     long rawPlaybackHeadPosition = 0xFFFFFFFFL & audioTrack.getPlaybackHeadPosition();
-    if (needsPassthroughWorkarounds) {
+    if (needsPassthroughWorkarounds) {//修复22/21的bug代码段，暂停之后获取的播放位置为0
       // Work around an issue with passthrough/direct AudioTracks on platform API versions 21/22
       // where the playback head position jumps back to zero on paused passthrough/direct audio
       // tracks. See [Internal: b/19187573].

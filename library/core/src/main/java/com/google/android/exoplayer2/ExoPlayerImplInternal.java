@@ -82,21 +82,21 @@ import java.util.Collections;
   private static final int RENDERING_INTERVAL_MS = 10;
   private static final int IDLE_INTERVAL_MS = 1000;
 
-  private final Renderer[] renderers;
-  private final RendererCapabilities[] rendererCapabilities;
-  private final TrackSelector trackSelector;
-  private final TrackSelectorResult emptyTrackSelectorResult;
-  private final LoadControl loadControl;
+  private final Renderer[] renderers;//渲染器
+  private final RendererCapabilities[] rendererCapabilities;//渲染器能力
+  private final TrackSelector trackSelector;//轨道选择器
+  private final TrackSelectorResult emptyTrackSelectorResult;//轨道选择结果
+  private final LoadControl loadControl;//加载控制器
   private final HandlerWrapper handler;
   private final HandlerThread internalPlaybackThread;
-  private final Handler eventHandler;
-  private final ExoPlayer player;
-  private final Timeline.Window window;
-  private final Timeline.Period period;
-  private final long backBufferDurationUs;
-  private final boolean retainBackBufferFromKeyframe;
-  private final DefaultMediaClock mediaClock;
-  private final PlaybackInfoUpdate playbackInfoUpdate;
+  private final Handler eventHandler;//事件处理器，looper通常是主线程
+  private final ExoPlayer player;//播放器接口
+  private final Timeline.Window window;//窗口
+  private final Timeline.Period period;//片段
+  private final long backBufferDurationUs;//相对于当前播放位置的可快退长度
+  private final boolean retainBackBufferFromKeyframe;//
+  private final DefaultMediaClock mediaClock;//默认媒体时钟
+  private final PlaybackInfoUpdate playbackInfoUpdate;//
   private final ArrayList<PendingMessageInfo> pendingMessages;
   private final Clock clock;
   private final MediaPeriodQueue queue;
@@ -113,9 +113,9 @@ import java.util.Collections;
   @Player.RepeatMode private int repeatMode;
   private boolean shuffleModeEnabled;
 
-  private int pendingPrepareCount;
-  private SeekPosition pendingInitialSeekPosition;
-  private long rendererPositionUs;
+  private int pendingPrepareCount;//需要准备的次数，就是prepare被要求的次数
+  private SeekPosition pendingInitialSeekPosition;//初始seek位置
+  private long rendererPositionUs;//當前需要被渲染的时间点（单位us）
   private int nextPendingMessageIndex;
 
   public ExoPlayerImplInternal(
@@ -298,7 +298,7 @@ import java.util.Collections;
           setShuffleModeEnabledInternal(msg.arg1 != 0);
           break;
         case MSG_DO_SOME_WORK:
-          doSomeWork();
+          doSomeWork();//循环做一些工作，这些工作包括：时间同步，通知渲染器渲染
           break;
         case MSG_SEEK_TO:
           seekToInternal((SeekPosition) msg.obj);
@@ -467,7 +467,7 @@ import java.util.Collections;
     // Update the playback position.
     MediaPeriodHolder playingPeriodHolder = queue.getPlayingPeriod();
     long periodPositionUs = playingPeriodHolder.mediaPeriod.readDiscontinuity();
-    if (periodPositionUs != C.TIME_UNSET) {
+    if (periodPositionUs != C.TIME_UNSET) {//如果时间没设置
       resetRendererPosition(periodPositionUs);
       // A MediaPeriod may report a discontinuity at the current playback position to ensure the
       // renderers are flushed. Only report the discontinuity externally if the position changed.
@@ -477,7 +477,7 @@ import java.util.Collections;
         playbackInfoUpdate.setPositionDiscontinuity(Player.DISCONTINUITY_REASON_INTERNAL);
       }
     } else {
-      rendererPositionUs = mediaClock.syncAndGetPositionUs();
+      rendererPositionUs = mediaClock.syncAndGetPositionUs();//同步并且获取时间
       periodPositionUs = playingPeriodHolder.toPeriodTime(rendererPositionUs);
       maybeTriggerPendingMessages(playbackInfo.positionUs, periodPositionUs);
       playbackInfo.positionUs = periodPositionUs;
@@ -493,7 +493,7 @@ import java.util.Collections;
   private void doSomeWork() throws ExoPlaybackException, IOException {
     long operationStartTimeMs = clock.uptimeMillis();
     updatePeriods();
-    if (!queue.hasPlayingPeriod()) {
+    if (!queue.hasPlayingPeriod()) {//若还没有准备好Period
       // We're still waiting for the first period to be prepared.
       maybeThrowPeriodPrepareError();
       scheduleNextWork(operationStartTimeMs, PREPARING_SOURCE_INTERVAL_MS);
@@ -571,7 +571,9 @@ import java.util.Collections;
   }
 
   private void scheduleNextWork(long thisOperationStartTimeMs, long intervalMs) {
+    //移除所有MSG_DO_SOME_WORK操作
     handler.removeMessages(MSG_DO_SOME_WORK);
+    //发送一个指定时间执行的MSG_DO_SOME_WORK操作，时间指定为这个操作开始加上时间间隔
     handler.sendEmptyMessageAtTime(MSG_DO_SOME_WORK, thisOperationStartTimeMs + intervalMs);
   }
 
@@ -759,13 +761,13 @@ import java.util.Collections;
 
   private void resetInternal(
       boolean releaseMediaSource, boolean resetPosition, boolean resetState) {
-    handler.removeMessages(MSG_DO_SOME_WORK);
+    handler.removeMessages(MSG_DO_SOME_WORK);//如果要重置，应当先移除正在工作的事情
     rebuffering = false;
     mediaClock.stop();
     rendererPositionUs = 0;
     for (Renderer renderer : enabledRenderers) {
       try {
-        disableRenderer(renderer);
+        disableRenderer(renderer);//让每个渲染器暂时停止工作
       } catch (ExoPlaybackException | RuntimeException e) {
         // There's nothing we can do.
         Log.e(TAG, "Stop failed.", e);

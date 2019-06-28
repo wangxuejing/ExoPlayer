@@ -15,6 +15,8 @@
  */
 package com.google.android.exoplayer2.util;
 
+import android.util.Log;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.PlaybackParameters;
 
@@ -26,9 +28,9 @@ public final class StandaloneMediaClock implements MediaClock {
 
   private final Clock clock;
 
-  private boolean started;
-  private long baseUs;
-  private long baseElapsedMs;
+  private boolean started; //是否启动
+  private long baseUs;     //计时基准点，每次seek之后会发生改变
+  private long baseElapsedMs;//计时基准点，启动之后才会
   private PlaybackParameters playbackParameters;
 
   /**
@@ -45,8 +47,8 @@ public final class StandaloneMediaClock implements MediaClock {
    * Starts the clock. Does nothing if the clock is already started.
    */
   public void start() {
-    if (!started) {
-      baseElapsedMs = clock.elapsedRealtime();
+    if (!started) {//若处于为启动状态
+      baseElapsedMs = clock.elapsedRealtime();//更新基准时间
       started = true;
     }
   }
@@ -55,7 +57,7 @@ public final class StandaloneMediaClock implements MediaClock {
    * Stops the clock. Does nothing if the clock is already stopped.
    */
   public void stop() {
-    if (started) {
+    if (started) {//
       resetPosition(getPositionUs());
       started = false;
     }
@@ -67,9 +69,9 @@ public final class StandaloneMediaClock implements MediaClock {
    * @param positionUs The position to set in microseconds.
    */
   public void resetPosition(long positionUs) {
-    baseUs = positionUs;
-    if (started) {
-      baseElapsedMs = clock.elapsedRealtime();
+    baseUs = positionUs;//重置时间
+    if (started) {//若时钟处于启动状态
+      baseElapsedMs = clock.elapsedRealtime();//将基准时间更新为当前时间
     }
   }
 
@@ -77,10 +79,11 @@ public final class StandaloneMediaClock implements MediaClock {
   public long getPositionUs() {
     long positionUs = baseUs;
     if (started) {
-      long elapsedSinceBaseMs = clock.elapsedRealtime() - baseElapsedMs;
-      if (playbackParameters.speed == 1f) {
+      long elapsedSinceBaseMs = clock.elapsedRealtime() - baseElapsedMs;//当前时间减去基准时间
+      Log.e("getPositionUs","baseElapsedMs="+baseElapsedMs+",__baseUs="+baseUs);
+      if (playbackParameters.speed == 1f) {//若播放速度为一倍速度
         positionUs += C.msToUs(elapsedSinceBaseMs);
-      } else {
+      } else {//若播放速度不为一倍速度
         positionUs += playbackParameters.getMediaTimeUsForPlayoutTimeMs(elapsedSinceBaseMs);
       }
     }
@@ -91,7 +94,7 @@ public final class StandaloneMediaClock implements MediaClock {
   public PlaybackParameters setPlaybackParameters(PlaybackParameters playbackParameters) {
     // Store the current position as the new base, in case the playback speed has changed.
     if (started) {
-      resetPosition(getPositionUs());
+      resetPosition(getPositionUs());//播放参数变化需要重置参数，比如播放速度改变了
     }
     this.playbackParameters = playbackParameters;
     return playbackParameters;

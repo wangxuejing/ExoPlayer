@@ -17,6 +17,8 @@ package com.google.android.exoplayer2.imademo;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Environment;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.C.ContentType;
 import com.google.android.exoplayer2.ExoPlayer;
@@ -79,22 +81,23 @@ import com.google.android.exoplayer2.util.Util;
     playerView.setPlayer(player);
 
     // This is the MediaSource representing the content media (i.e. not the ad).
-    String contentUrl = context.getString(R.string.content_url);
+//    String contentUrl =Environment.getExternalStorageDirectory().getAbsolutePath() + "/Movies/Sync-One2-Test-1080p-24-H_264_V.mp4";
+    String contentUrl =Environment.getExternalStorageDirectory().getAbsolutePath() + "/Movies/Momo.mp3";
     MediaSource contentMediaSource = buildMediaSource(Uri.parse(contentUrl));
 
     // Compose the content media source into a new AdsMediaSource with both ads and content.
-    MediaSource mediaSourceWithAds =
-        new AdsMediaSource(
-            contentMediaSource,
-            /* adMediaSourceFactory= */ this,
-            adsLoader,
-            playerView.getOverlayFrameLayout(),
-            /* eventHandler= */ null,
-            /* eventListener= */ null);
+//    MediaSource mediaSourceWithAds =
+//        new AdsMediaSource(
+//            contentMediaSource,
+//            /* adMediaSourceFactory= */ this,
+//            adsLoader,
+//            playerView.getOverlayFrameLayout(),
+//            /* eventHandler= */ null,
+//            /* eventListener= */ null);
 
     // Prepare the player with the source.
     player.seekTo(contentPosition);
-    player.prepare(mediaSourceWithAds);
+    player.prepare(contentMediaSource);
     player.setPlayWhenReady(true);
   }
 
